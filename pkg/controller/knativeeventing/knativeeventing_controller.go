@@ -12,6 +12,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -125,6 +126,7 @@ func (r *ReconcileKnativeEventing) Reconcile(request reconcile.Request) (reconci
 		r.initStatus,
 		r.install,
 		r.checkDeployments,
+		r.excludeNamespaces,
 	}
 
 	for _, stage := range stages {
@@ -219,6 +221,83 @@ func (r *ReconcileKnativeEventing) checkDeployments(instance *eventingv1alpha1.K
 	}
 	log.Info("All deployments are available")
 	instance.Status.MarkDeploymentsAvailable()
+	return nil
+}
+
+func (r *ReconcileKnativeEventing) excludeNamespaces(instance *eventingv1alpha1.KnativeEventing) error {
+	namespacesToExclude := []string{
+		"kube-node-lease",
+		"kube-public",
+		"kube-system",
+		"openshift",
+		"openshift-apiserver",
+		"openshift-apiserver-operator",
+		"openshift-authentication",
+		"openshift-authentication-operator",
+		"openshift-cloud-credential-operator",
+		"openshift-cluster-machine-approver",
+		"openshift-cluster-node-tuning-operator",
+		"openshift-cluster-samples-operator",
+		"openshift-cluster-storage-operator",
+		"openshift-cluster-version",
+		"openshift-config",
+		"openshift-config-managed",
+		"openshift-console",
+		"openshift-console-operator",
+		"openshift-controller-manager",
+		"openshift-controller-manager-operator",
+		"openshift-csi-snapshot-controller",
+		"openshift-csi-snapshot-controller-operator",
+		"openshift-dns",
+		"openshift-dns-operator",
+		"openshift-etcd",
+		"openshift-etcd-operator",
+		"openshift-image-registry",
+		"openshift-infra",
+		"openshift-ingress",
+		"openshift-ingress-operator",
+		"openshift-insights",
+		"openshift-kni-infra",
+		"openshift-kube-apiserver",
+		"openshift-kube-apiserver-operator",
+		"openshift-kube-controller-manager",
+		"openshift-kube-controller-manager-operator",
+		"openshift-kube-scheduler",
+		"openshift-kube-scheduler-operator",
+		"openshift-kube-storage-version-migrator",
+		"openshift-kube-storage-version-migrator-operator",
+		"openshift-machine-api",
+		"openshift-machine-config-operator",
+		"openshift-marketplace",
+		"openshift-monitoring",
+		"openshift-multus",
+		"openshift-network-operator",
+		"openshift-node",
+		"openshift-openstack-infra",
+		"openshift-operator-lifecycle-manager",
+		"openshift-operators",
+		"openshift-ovirt-infra",
+		"openshift-sdn",
+		"openshift-service-ca",
+		"openshift-service-ca-operator",
+		"openshift-service-catalog-apiserver-operator",
+		"openshift-service-catalog-controller-manager-operator",
+		"openshift-user-workload-monitoring",
+		"openshift-vsphere-infra",
+	}
+	for _, ns := range namespacesToExclude {
+		namespace := v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   ns,
+				Labels: map[string]string{"bindings.knative.dev/exclude": "true"},
+			},
+		}
+		log.Info("labelling namespace", ns)
+		if err := r.client.Update(context.TODO(), &namespace); err != nil {
+			log.Info("error", err)
+			return err
+		}
+	}
 	return nil
 }
 
